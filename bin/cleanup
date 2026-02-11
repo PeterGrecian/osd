@@ -1,0 +1,58 @@
+#!/bin/bash
+# Cleanup old dated indexes
+
+# Delete indexes older than N days
+delete_older_than_days() {
+    days=$1
+    pattern=${2:-"*"}
+
+    cutoff_date=$(date -d "$days days ago" +%Y.%m.%d)
+
+    echo "Deleting $pattern indexes older than $cutoff_date ($days days ago)..."
+
+    # List all matching indexes
+    curl -sk -u admin:Admin123\!@Secure "https://localhost:9200/_cat/indices/$pattern?h=index" | \
+    while read index; do
+        # Extract date from index name (format: prefix-YYYY.MM.DD)
+        if [[ $index =~ -([0-9]{4}\.[0-9]{2}\.[0-9]{2})$ ]]; then
+            index_date="${BASH_REMATCH[1]}"
+
+            # Compare dates (convert dots to hyphens for date comparison)
+            index_date_cmp=$(echo $index_date | tr '.' '-')
+            cutoff_date_cmp=$(echo $cutoff_date | tr '.' '-')
+
+            if [[ "$index_date_cmp" < "$cutoff_date_cmp" ]]; then
+                echo "  Deleting: $index (date: $index_date)"
+                curl -sk -u admin:Admin123\!@Secure -X DELETE "https://localhost:9200/$index" > /dev/null 2>&1
+            fi
+        fi
+    done
+
+    echo "Done!"
+}
+
+# Show usage
+if [ $# -lt 1 ]; then
+    cat <<EOF
+Usage: cleanup <days> [pattern]
+
+Delete dated indexes older than N days.
+
+Examples:
+  cleanup 30                    # Delete all dated indexes older than 30 days
+  cleanup 7 'cloudwatch-*'      # Delete CloudWatch logs older than 7 days
+  cleanup 90 'dynamodb-*'       # Delete DynamoDB dated indexes older than 90 days
+  cleanup 30 'dynamodb-gardencam-stats-*'  # Delete specific table history
+
+Common patterns:
+  cloudwatch-*                  All CloudWatch logs
+  dynamodb-*                    All DynamoDB dated indexes
+  dynamodb-gardencam-*          All gardencam DynamoDB indexes
+  dynamodb-lambda-*             All Lambda execution logs
+
+Undated indexes (snapshots) are never deleted by this script.
+EOF
+    exit 1
+fi
+
+delete_older_than_days "$@"

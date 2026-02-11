@@ -77,6 +77,8 @@ For CloudWatch ingestion, ensure your AWS credentials have:
 
 ## Index Management
 
+### Viewing Indexes
+
 Use the `bin/indx` script for easy index operations:
 
 ```bash
@@ -98,6 +100,23 @@ bin/indx dynamodb gardencam-stats
 # Show help
 bin/indx help
 ```
+
+### Cleaning Up Old Data
+
+Use `bin/cleanup` to delete old dated indexes:
+
+```bash
+# Delete CloudWatch logs older than 30 days
+bin/cleanup 30 'cloudwatch-*'
+
+# Delete all dated indexes older than 90 days
+bin/cleanup 90
+
+# Delete specific table history older than 7 days
+bin/cleanup 7 'dynamodb-gardencam-stats-*'
+```
+
+**Note:** Undated indexes (like `dynamodb-hits`) are snapshots and never deleted by cleanup.
 
 ## Syncing AWS Data
 
