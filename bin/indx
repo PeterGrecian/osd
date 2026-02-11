@@ -1,0 +1,139 @@
+#!/bin/bash
+# OpenSearch index management script
+
+URL="https://localhost:9200"
+AUTH="admin:Admin123!@Secure"
+
+cmd=${1:-list}
+
+case "$cmd" in
+  list|ls)
+    # List all indexes
+    curl -sk -u "$AUTH" "$URL/_cat/indices?v&s=index" | grep -v "^\."
+    ;;
+
+  all)
+    # List ALL indexes including system
+    curl -sk -u "$AUTH" "$URL/_cat/indices?v&s=index"
+    ;;
+
+  count)
+    # Count documents in an index pattern
+    pattern=${2:-*}
+    curl -sk -u "$AUTH" "$URL/${pattern}/_count?pretty"
+    ;;
+
+  search)
+    # Search an index pattern
+    pattern=${2:-*}
+    query=${3:-'{"query":{"match_all":{}},"size":10}'}
+    curl -sk -u "$AUTH" "$URL/${pattern}/_search?pretty" \
+      -H 'Content-Type: application/json' \
+      -d "$query"
+    ;;
+
+  stats)
+    # Show index stats
+    pattern=${2:-*}
+    curl -sk -u "$AUTH" "$URL/${pattern}/_stats?pretty&human"
+    ;;
+
+  mapping)
+    # Show index mapping
+    pattern=${2:-*}
+    curl -sk -u "$AUTH" "$URL/${pattern}/_mapping?pretty"
+    ;;
+
+  delete)
+    # Delete an index (with confirmation)
+    pattern=$2
+    if [ -z "$pattern" ]; then
+      echo "Usage: indx delete <index-pattern>"
+      exit 1
+    fi
+    echo "WARNING: About to delete index pattern: $pattern"
+    read -p "Are you sure? (yes/no): " confirm
+    if [ "$confirm" = "yes" ]; then
+      curl -sk -u "$AUTH" -X DELETE "$URL/${pattern}?pretty"
+    else
+      echo "Cancelled"
+    fi
+    ;;
+
+  cloudwatch)
+    # Quick view of CloudWatch logs
+    curl -sk -u "$AUTH" "$URL/cloudwatch-*/_search?pretty" \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "query": {"match_all": {}},
+        "size": 10,
+        "sort": [{"@timestamp": "desc"}]
+      }'
+    ;;
+
+  dynamodb)
+    # Quick view of DynamoDB items
+    table=${2:-*}
+    curl -sk -u "$AUTH" "$URL/dynamodb-${table}/_search?pretty" \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "query": {"match_all": {}},
+        "size": 10
+      }'
+    ;;
+
+  summary)
+    # Show summary of all indexes
+    echo "=== OpenSearch Index Summary ==="
+    echo ""
+    echo "CloudWatch Logs:"
+    count=$(curl -sk -u "$AUTH" "$URL/cloudwatch-*/_count" | grep -o '"count":[0-9]*' | cut -d: -f2)
+    echo "  Total documents: $count"
+    echo ""
+    echo "DynamoDB Tables:"
+    count=$(curl -sk -u "$AUTH" "$URL/dynamodb-*/_count" | grep -o '"count":[0-9]*' | cut -d: -f2)
+    echo "  Total documents: $count"
+    echo ""
+    echo "Local Logs:"
+    count=$(curl -sk -u "$AUTH" "$URL/logs/_count" | grep -o '"count":[0-9]*' | cut -d: -f2)
+    echo "  Total documents: $count"
+    echo ""
+    echo "All Data Indexes:"
+    curl -sk -u "$AUTH" "$URL/_cat/indices?v&h=index,docs.count&s=docs.count:desc" | grep -v "^\." | grep -v "^index"
+    ;;
+
+  help|*)
+    cat <<EOF
+OpenSearch Index Management Tool
+
+Usage: indx <command> [options]
+
+Commands:
+  list, ls              List all non-system indexes
+  all                   List all indexes (including system)
+  count [pattern]       Count documents (default: all indexes)
+  search [pattern]      Search indexes (default: all)
+  stats [pattern]       Show index statistics
+  mapping [pattern]     Show index mapping/schema
+  delete <pattern>      Delete an index (with confirmation)
+  cloudwatch            Quick view of recent CloudWatch logs
+  dynamodb [table]      Quick view of DynamoDB table
+  summary               Show summary of all data
+  help                  Show this help
+
+Examples:
+  indx list
+  indx count cloudwatch-*
+  indx search dynamodb-gardencam-stats
+  indx cloudwatch
+  indx dynamodb k2-bus-arrivals-stops
+  indx summary
+
+Index patterns:
+  cloudwatch-*          All CloudWatch logs
+  dynamodb-*            All DynamoDB tables
+  dynamodb-gardencam-*  All gardencam DynamoDB tables
+  logs                  Local application logs
+EOF
+    ;;
+esac
