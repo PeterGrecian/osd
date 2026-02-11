@@ -1,0 +1,114 @@
+#!/bin/bash
+# Consolidate daily indexes into monthly indexes
+
+URL="https://localhost:9200"
+AUTH="admin:Admin123!@Secure"
+
+consolidate_to_monthly() {
+    pattern=$1
+    year=$2
+    month=$3
+
+    # Format: YYYY.MM
+    year_month="${year}.${month}"
+
+    # Source pattern for daily indexes
+    source_pattern="${pattern}-${year}.${month}.*"
+
+    # Target monthly index
+    target_index="${pattern}-${year}.${month}"
+
+    echo "Consolidating ${source_pattern} -> ${target_index}"
+
+    # Check if source indexes exist
+    count=$(curl -sk -u "$AUTH" "$URL/_cat/indices/${source_pattern}?h=index" 2>/dev/null | wc -l)
+
+    if [ $count -eq 0 ]; then
+        echo "  No indexes found matching ${source_pattern}"
+        return
+    fi
+
+    echo "  Found $count daily indexes"
+
+    # Reindex all daily indexes into monthly index
+    curl -sk -u "$AUTH" -X POST "$URL/_reindex?pretty" \
+        -H 'Content-Type: application/json' \
+        -d "{
+          \"source\": {
+            \"index\": \"${source_pattern}\"
+          },
+          \"dest\": {
+            \"index\": \"${target_index}\"
+          }
+        }" > /tmp/reindex_$$.log 2>&1
+
+    # Check if successful
+    if grep -q '"failures" : \[ \]' /tmp/reindex_$$.log; then
+        docs=$(grep '"total"' /tmp/reindex_$$.log | head -1 | grep -o '[0-9]*')
+        echo "  ✓ Consolidated $docs documents into ${target_index}"
+
+        # Delete the daily indexes
+        echo "  Deleting daily indexes..."
+        curl -sk -u "$AUTH" -X DELETE "$URL/${source_pattern}" > /dev/null 2>&1
+        echo "  ✓ Deleted ${source_pattern}"
+    else
+        echo "  ✗ Error during consolidation"
+        cat /tmp/reindex_$$.log
+    fi
+
+    rm -f /tmp/reindex_$$.log
+}
+
+# Show usage
+if [ $# -lt 1 ]; then
+    cat <<EOF
+Usage: consolidate <pattern> [year] [month]
+       consolidate <pattern> [year]
+
+Consolidate daily indexes into monthly indexes.
+
+Examples:
+  # Consolidate all 2025 months for lambda logs
+  consolidate 'dynamodb-lambda-execution-logs' 2025
+
+  # Consolidate specific month
+  consolidate 'dynamodb-lambda-execution-logs' 2025 08
+
+  # Consolidate all CloudWatch logs for 2025
+  consolidate 'cloudwatch' 2025
+
+  # Consolidate specific pattern and month
+  consolidate 'dynamodb-gardencam-stats' 2026 01
+
+This will:
+1. Reindex all daily indexes for the month into one monthly index
+2. Delete the daily indexes after successful consolidation
+3. Preserve @timestamp for time-series queries
+
+Warning: This cannot be undone. Make sure you have backups if needed.
+EOF
+    exit 1
+fi
+
+pattern=$1
+year=$2
+month=$3
+
+if [ -z "$year" ]; then
+    echo "Error: Year required"
+    exit 1
+fi
+
+if [ -z "$month" ]; then
+    # Consolidate all months for the year
+    echo "Consolidating all months for $pattern in $year..."
+    for m in 01 02 03 04 05 06 07 08 09 10 11 12; do
+        consolidate_to_monthly "$pattern" "$year" "$m"
+    done
+else
+    # Consolidate specific month
+    consolidate_to_monthly "$pattern" "$year" "$month"
+fi
+
+echo ""
+echo "Done! Check indexes with: bin/indx list | grep $pattern"
