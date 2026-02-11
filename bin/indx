@@ -8,8 +8,8 @@ cmd=${1:-list}
 
 case "$cmd" in
   list|ls)
-    # List all indexes
-    curl -sk -u "$AUTH" "$URL/_cat/indices?v&s=index" | grep -v "^\."
+    # List all indexes (excluding system indexes)
+    curl -sk -u "$AUTH" "$URL/_cat/indices?v&s=index" | grep -v " \."
     ;;
 
   all)
