@@ -72,13 +72,46 @@ def push_to_opensearch(items, table_name):
 
     # Build bulk request
     bulk_data = []
-    index_name = f"dynamodb-{table_name.lower().replace('_', '-')}"
+    base_index_name = f"dynamodb-{table_name.lower().replace('_', '-')}"
 
     for i, item in enumerate(items):
-        # Generate a unique ID (use a key field if available, otherwise use index)
+        # Look for timestamp fields in the data
+        timestamp_value = None
+        timestamp_field = None
+        for ts_field in ['timestamp', 'created_at', 'createdAt', 'date', 'time', 'eventTime', 'updated_at', 'updatedAt']:
+            if ts_field in item:
+                timestamp_field = ts_field
+                timestamp_value = item[ts_field]
+                break
+
+        # Parse timestamp and determine index name
+        event_date = None
+        if timestamp_value:
+            try:
+                # Handle different timestamp formats
+                if isinstance(timestamp_value, (int, float)):
+                    # Unix timestamp (seconds or milliseconds)
+                    if timestamp_value > 10000000000:  # Milliseconds
+                        event_date = datetime.fromtimestamp(timestamp_value / 1000)
+                    else:  # Seconds
+                        event_date = datetime.fromtimestamp(timestamp_value)
+                elif isinstance(timestamp_value, str):
+                    # ISO format or other string formats
+                    from dateutil import parser
+                    event_date = parser.parse(timestamp_value)
+            except:
+                pass
+
+        # Use dated index if we have a timestamp, otherwise undated
+        if event_date:
+            index_name = f"{base_index_name}-{event_date.strftime('%Y.%m.%d')}"
+        else:
+            index_name = base_index_name
+
+        # Generate a unique ID
         doc_id = None
-        for key_field in ['id', 'pk', 'key', 'timestamp']:
-            if key_field in item:
+        for key_field in ['id', 'pk', 'key', timestamp_field if timestamp_field else 'xxx']:
+            if key_field and key_field in item:
                 doc_id = str(item[key_field])
                 break
         if not doc_id:
@@ -96,6 +129,10 @@ def push_to_opensearch(items, table_name):
         doc = json.loads(json.dumps(item, cls=DecimalEncoder))
         doc['_table'] = table_name
         doc['_synced_at'] = datetime.now().isoformat()
+
+        # Add @timestamp if we found a timestamp
+        if event_date:
+            doc['@timestamp'] = event_date.isoformat()
 
         bulk_data.append(json.dumps(index_action))
         bulk_data.append(json.dumps(doc))

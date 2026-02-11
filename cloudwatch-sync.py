@@ -64,17 +64,20 @@ def push_to_opensearch(events, log_group):
     # Build bulk request
     bulk_data = []
     for event in events:
+        # Use event timestamp for index date (not current date)
+        event_date = datetime.fromtimestamp(event['timestamp'] / 1000)
+
         # Index action
         index_action = {
             "index": {
-                "_index": f"cloudwatch-{datetime.now().strftime('%Y.%m.%d')}",
+                "_index": f"cloudwatch-{event_date.strftime('%Y.%m.%d')}",
                 "_id": f"{log_group}-{event['eventId']}"
             }
         }
 
         # Document
         doc = {
-            "@timestamp": datetime.fromtimestamp(event['timestamp'] / 1000).isoformat(),
+            "@timestamp": event_date.isoformat(),
             "message": event['message'],
             "log_group": log_group,
             "log_stream": event.get('logStreamName', ''),
