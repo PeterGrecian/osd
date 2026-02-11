@@ -43,19 +43,6 @@ services:
     networks:
       - opensearch-net
 
-  logstash:
-    image: opensearchproject/logstash-oss-with-opensearch-output-plugin:latest
-    container_name: logstash
-    volumes:
-      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
-      - ~/.aws:/root/.aws:ro
-    environment:
-      - LS_JAVA_OPTS=-Xms256m -Xmx512m
-    depends_on:
-      - opensearch
-    networks:
-      - opensearch-net
-
 volumes:
   opensearch-data:
     driver: local
