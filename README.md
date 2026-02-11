@@ -75,18 +75,55 @@ For CloudWatch ingestion, ensure your AWS credentials have:
 - **Index Management**: Set up Index State Management (ISM) policies to manage data retention
 - **Performance**: Use index templates and mapping for better performance
 
+## Index Management
+
+Use the `bin/indx` script for easy index operations:
+
+```bash
+# List all indexes
+bin/indx list
+
+# Show summary of all data
+bin/indx summary
+
+# Count documents in CloudWatch logs
+bin/indx count 'cloudwatch-*'
+
+# View recent CloudWatch logs
+bin/indx cloudwatch
+
+# View DynamoDB table
+bin/indx dynamodb gardencam-stats
+
+# Show help
+bin/indx help
+```
+
+## Syncing AWS Data
+
+```bash
+# Sync CloudWatch logs (last 24 hours)
+./cloudwatch-sync.py 24
+
+# Sync all DynamoDB tables
+./dynamodb-sync.py
+
+# Limit DynamoDB sync (first 100 items per table)
+./dynamodb-sync.py 100
+```
+
 ## Troubleshooting
 
 ```bash
 # Check service status
-docker-compose ps
+docker compose ps
 
 # View OpenSearch logs
-docker-compose logs opensearch
+docker compose logs opensearch
 
 # Test OpenSearch connection
-curl -k -u admin:Admin123! https://localhost:9200
+curl -k -u admin:Admin123!@Secure https://localhost:9200
 
-# Check indices
-curl -k -u admin:Admin123! https://localhost:9200/_cat/indices?v
+# Check indices (or use: bin/indx list)
+curl -k -u admin:Admin123!@Secure https://localhost:9200/_cat/indices?v
 ```
