@@ -35,6 +35,7 @@ services:
     container_name: fluent-bit
     volumes:
       - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
       - ./logs:/logs:ro
       - ~/.aws:/root/.aws:ro
     depends_on:
