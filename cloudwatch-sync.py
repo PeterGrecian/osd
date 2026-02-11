@@ -65,14 +65,25 @@ def push_to_opensearch(events, log_group):
 
     # Build bulk request
     bulk_data = []
+    now = datetime.now()
+
     for event in events:
         # Use event timestamp for index date (not current date)
         event_date = datetime.fromtimestamp(event['timestamp'] / 1000)
 
+        # Calculate age of the event
+        age_days = (now - event_date).days
+
+        # Use monthly index for old data (30+ days), daily for recent data
+        if age_days >= 30:
+            index_name = f"cloudwatch-{event_date.strftime('%Y.%m')}"
+        else:
+            index_name = f"cloudwatch-{event_date.strftime('%Y.%m.%d')}"
+
         # Index action
         index_action = {
             "index": {
-                "_index": f"cloudwatch-{event_date.strftime('%Y.%m.%d')}",
+                "_index": index_name,
                 "_id": f"{log_group}-{event['eventId']}"
             }
         }
