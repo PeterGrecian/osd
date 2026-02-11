@@ -120,28 +120,32 @@ bin/cleanup 7 'dynamodb-gardencam-stats-*'
 
 ## Syncing AWS Data
 
-**Quick sync (recommended):**
+**Smart sync (recommended):**
 ```bash
-# Sync everything at once
+# Auto-detects latest timestamp and syncs from there
 ./sync-cron.sh
 
 # Or individually:
-./cloudwatch-sync.py 1   # Last hour
-./dynamodb-sync.py       # All tables
+./cloudwatch-sync.py     # Smart sync from latest log
+./dynamodb-sync.py       # Smart sync from latest items
 ```
 
-**Custom sync:**
+How it works:
+- Queries OpenSearch for latest @timestamp
+- Only syncs data newer than what you have
+- No gaps, no duplicates, efficient!
+
+**Force sync (when needed):**
 ```bash
-# CloudWatch logs (last N hours)
-./cloudwatch-sync.py 24  # Last 24 hours
-./cloudwatch-sync.py 168 # Last 7 days
+# Ignore existing data and force sync last N hours
+./cloudwatch-sync.py --force 168  # Force last 7 days
+./cloudwatch-sync.py 24           # Fallback to 24h if no existing data
 
-# DynamoDB tables (limit items per table)
-./dynamodb-sync.py 100   # First 100 items per table
-./dynamodb-sync.py       # All items (full sync)
+# DynamoDB full rescan
+./dynamodb-sync.py --force        # Rescan all tables
 ```
 
-**Note:** Data is NOT auto-synced. Run these commands manually when you want fresh data from AWS.
+**Note:** Data is NOT auto-synced. Run `./sync-cron.sh` manually when you want fresh data from AWS.
 
 ## Troubleshooting
 
