@@ -101,16 +101,28 @@ bin/indx help
 
 ## Syncing AWS Data
 
+**Quick sync (recommended):**
 ```bash
-# Sync CloudWatch logs (last 24 hours)
-./cloudwatch-sync.py 24
+# Sync everything at once
+./sync-cron.sh
 
-# Sync all DynamoDB tables
-./dynamodb-sync.py
-
-# Limit DynamoDB sync (first 100 items per table)
-./dynamodb-sync.py 100
+# Or individually:
+./cloudwatch-sync.py 1   # Last hour
+./dynamodb-sync.py       # All tables
 ```
+
+**Custom sync:**
+```bash
+# CloudWatch logs (last N hours)
+./cloudwatch-sync.py 24  # Last 24 hours
+./cloudwatch-sync.py 168 # Last 7 days
+
+# DynamoDB tables (limit items per table)
+./dynamodb-sync.py 100   # First 100 items per table
+./dynamodb-sync.py       # All items (full sync)
+```
+
+**Note:** Data is NOT auto-synced. Run these commands manually when you want fresh data from AWS.
 
 ## Troubleshooting
 
