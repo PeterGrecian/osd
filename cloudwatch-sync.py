@@ -2,6 +2,7 @@
 """
 CloudWatch to OpenSearch sync script
 Fetches logs from CloudWatch and pushes them to OpenSearch
+Smart sync: queries OpenSearch for latest timestamp and syncs from there
 """
 
 import boto3
@@ -10,6 +11,7 @@ import json
 from datetime import datetime, timedelta
 import time
 import os
+import sys
 
 # Configuration
 OPENSEARCH_URL = "https://localhost:9200"
@@ -121,15 +123,69 @@ def push_to_opensearch(events, log_group):
         print(f"Error pushing to OpenSearch: {e}")
         return 0
 
-def sync_logs(hours_back=24):
-    """Sync logs from the last N hours"""
+def get_latest_timestamp():
+    """Get the latest @timestamp from existing CloudWatch indexes"""
+    try:
+        response = requests.post(
+            f"{OPENSEARCH_URL}/cloudwatch-*/_search",
+            auth=(OPENSEARCH_USER, OPENSEARCH_PASSWORD),
+            headers={"Content-Type": "application/json"},
+            json={
+                "size": 0,
+                "aggs": {
+                    "max_timestamp": {
+                        "max": {
+                            "field": "@timestamp"
+                        }
+                    }
+                }
+            },
+            verify=False
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            max_ts = result.get('aggregations', {}).get('max_timestamp', {}).get('value')
+            if max_ts:
+                # Convert from milliseconds to datetime
+                return datetime.fromtimestamp(max_ts / 1000)
+        return None
+    except Exception as e:
+        print(f"Could not get latest timestamp: {e}")
+        return None
+
+def sync_logs(hours_back=None, force_hours=False):
+    """Sync logs from the last N hours, or from last sync if hours_back not specified"""
     end_time = datetime.now()
-    start_time = end_time - timedelta(hours=hours_back)
+
+    if hours_back and force_hours:
+        # User explicitly specified hours, use that
+        start_time = end_time - timedelta(hours=hours_back)
+        print(f"Syncing logs from {start_time} to {end_time} (forced {hours_back}h)")
+    else:
+        # Try to get latest timestamp from OpenSearch
+        latest = get_latest_timestamp()
+
+        if latest:
+            # Subtract 5 minutes to ensure we don't miss anything due to timing
+            start_time = latest - timedelta(minutes=5)
+            hours_since = (end_time - start_time).total_seconds() / 3600
+            print(f"Smart sync: Latest log is {latest}")
+            print(f"Syncing logs from {start_time} to {end_time} ({hours_since:.1f}h)")
+        elif hours_back:
+            # No existing data, use provided hours
+            start_time = end_time - timedelta(hours=hours_back)
+            print(f"No existing logs found. Syncing last {hours_back} hours")
+            print(f"Syncing logs from {start_time} to {end_time}")
+        else:
+            # No existing data and no hours specified, default to 24h
+            hours_back = 24
+            start_time = end_time - timedelta(hours=hours_back)
+            print(f"No existing logs found. Syncing last {hours_back} hours (default)")
+            print(f"Syncing logs from {start_time} to {end_time}")
 
     start_time_ms = int(start_time.timestamp() * 1000)
     end_time_ms = int(end_time.timestamp() * 1000)
-
-    print(f"Syncing logs from {start_time} to {end_time}")
 
     total_events = 0
     for log_group in LOG_GROUPS:
@@ -147,17 +203,25 @@ def sync_logs(hours_back=24):
     return total_events
 
 if __name__ == "__main__":
-    import sys
-
     # Disable SSL warnings
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    hours = int(sys.argv[1]) if len(sys.argv) > 1 else 24
-
     print(f"CloudWatch to OpenSearch Sync")
     print(f"Region: {AWS_REGION}")
     print(f"Log groups: {len(LOG_GROUPS)}")
-    print(f"Time range: Last {hours} hours\n")
+    print()
 
-    sync_logs(hours)
+    # Parse arguments
+    force_hours = False
+    hours = None
+
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '--force' and len(sys.argv) > 2:
+            force_hours = True
+            hours = int(sys.argv[2])
+            print(f"Force mode: Syncing last {hours} hours (ignoring existing data)")
+        else:
+            hours = int(sys.argv[1])
+
+    sync_logs(hours_back=hours, force_hours=force_hours)
