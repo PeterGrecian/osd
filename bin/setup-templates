@@ -1,0 +1,108 @@
+#!/bin/bash
+# Set up index templates for proper field mappings
+
+OPENSEARCH_URL="https://localhost:9200"
+OPENSEARCH_USER="admin"
+OPENSEARCH_PASS="Admin123!@Secure"
+
+echo "Creating index templates..."
+
+# CloudWatch logs template
+echo "Setting up cloudwatch-* template..."
+curl -sk -u "$OPENSEARCH_USER:$OPENSEARCH_PASS" \
+  -X PUT "$OPENSEARCH_URL/_index_template/cloudwatch-template" \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "index_patterns": ["cloudwatch-*"],
+  "priority": 1,
+  "template": {
+    "mappings": {
+      "properties": {
+        "@timestamp": {"type": "date"},
+        "message": {"type": "text"},
+        "log_group": {"type": "keyword"},
+        "log_stream": {"type": "keyword"},
+        "lambda_name": {"type": "keyword"},
+        "service_name": {"type": "keyword"},
+        "log_type": {"type": "keyword"},
+        "duration_ms": {"type": "float"},
+        "ingestion_time": {"type": "long"},
+        "parsed": {
+          "properties": {
+            "httpMethod": {"type": "keyword"},
+            "status": {"type": "keyword"},
+            "sourceIp": {"type": "ip"},
+            "routeKey": {"type": "keyword"},
+            "protocol": {"type": "keyword"},
+            "requestId": {"type": "keyword"},
+            "resourcePath": {"type": "keyword"}
+          }
+        }
+      }
+    }
+  }
+}'
+
+echo -e "\n"
+
+# DynamoDB template (with common fields across tables)
+echo "Setting up dynamodb-* template..."
+curl -sk -u "$OPENSEARCH_USER:$OPENSEARCH_PASS" \
+  -X PUT "$OPENSEARCH_URL/_index_template/dynamodb-template" \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "index_patterns": ["dynamodb-*"],
+  "priority": 1,
+  "template": {
+    "mappings": {
+      "properties": {
+        "@timestamp": {"type": "date"},
+        "_table": {"type": "keyword"},
+        "_synced_at": {"type": "date"},
+        "timestamp": {"type": "date"},
+        "stage": {"type": "keyword"},
+        "path": {"type": "keyword"},
+        "host": {"type": "keyword"},
+        "ip": {"type": "ip"},
+        "request_id": {"type": "keyword"},
+        "filename": {"type": "keyword"},
+        "mode": {"type": "keyword"}
+      }
+    }
+  }
+}'
+
+echo -e "\n"
+
+# Operations log template
+echo "Setting up operations-log-* template..."
+curl -sk -u "$OPENSEARCH_USER:$OPENSEARCH_PASS" \
+  -X PUT "$OPENSEARCH_URL/_index_template/operations-template" \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "index_patterns": ["operations-log-*"],
+  "priority": 1,
+  "template": {
+    "mappings": {
+      "properties": {
+        "@timestamp": {"type": "date"},
+        "operation": {"type": "keyword"},
+        "status": {"type": "keyword"},
+        "hostname": {"type": "keyword"},
+        "user": {"type": "keyword"},
+        "working_dir": {"type": "keyword"},
+        "details": {"type": "text"}
+      }
+    }
+  }
+}'
+
+echo -e "\n\n✓ Index templates created!"
+echo ""
+echo "NOTE: These templates only apply to NEW indexes."
+echo "Existing indexes will keep their current mappings."
+echo ""
+echo "For existing indexes, use these field names for aggregations:"
+echo "  - log_group.keyword (not log_group)"
+echo "  - log_stream.keyword (not log_stream)"
+echo "  - _table.keyword (not _table)"

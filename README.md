@@ -2,6 +2,24 @@
 
 A local OpenSearch + Dashboards stack for ingesting and visualizing CloudWatch and application logs.
 
+## Daily Startup/Syncup
+
+```bash
+# 1. Start the stack
+bin/start
+
+# 2. Sync latest data from AWS
+./sync-now.sh              # One-time sync
+./sync-now.sh --watch      # Keep syncing every 5 min (Ctrl+C to stop)
+./sync-now.sh --watch 60   # Keep syncing every 60 sec
+
+# 3. Open dashboards
+# Visit: http://localhost:5601
+# Login: admin / Admin123!@Secure
+```
+
+**That's it!** The sync script auto-detects what's new and only fetches fresh data.
+
 ## Quick Start
 
 ```bash
@@ -123,7 +141,12 @@ bin/cleanup 7 'dynamodb-gardencam-stats-*'
 **Smart sync (recommended):**
 ```bash
 # Auto-detects latest timestamp and syncs from there
-./sync-cron.sh
+./sync-now.sh
+
+# Watch mode - keeps syncing automatically
+./sync-now.sh --watch      # Every 5 minutes (default)
+./sync-now.sh --watch 60   # Every 60 seconds
+# Press Ctrl+C to stop watch mode
 
 # Or individually:
 ./cloudwatch-sync.py     # Smart sync from latest log
@@ -134,6 +157,7 @@ How it works:
 - Queries OpenSearch for latest @timestamp
 - Only syncs data newer than what you have
 - No gaps, no duplicates, efficient!
+- Watch mode keeps data fresh automatically
 
 **Force sync (when needed):**
 ```bash
@@ -145,7 +169,7 @@ How it works:
 ./dynamodb-sync.py --force        # Rescan all tables
 ```
 
-**Note:** Data is NOT auto-synced. Run `./sync-cron.sh` manually when you want fresh data from AWS.
+**Note:** Data is NOT auto-synced. Run `./sync-now.sh` manually when you want fresh data from AWS.
 
 ## Troubleshooting
 

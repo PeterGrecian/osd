@@ -1,0 +1,35 @@
+#!/bin/bash
+# Stop OpenSearch stack
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+# Calculate uptime if we have start time
+UPTIME_MSG=""
+if [ -f /tmp/osd-start-time ]; then
+    START_TIME=$(cat /tmp/osd-start-time)
+    STOP_TIME=$(date +%s)
+    UPTIME=$((STOP_TIME - START_TIME))
+    UPTIME_HOURS=$((UPTIME / 3600))
+    UPTIME_MINS=$(((UPTIME % 3600) / 60))
+    UPTIME_MSG="Uptime: ${UPTIME_HOURS}h ${UPTIME_MINS}m (${UPTIME}s)"
+    rm -f /tmp/osd-start-time
+else
+    UPTIME_MSG="Uptime: unknown"
+fi
+
+# Log before stopping (while OpenSearch is still available)
+bin/log-operation "stop" "initiated" "OpenSearch stack shutdown. $UPTIME_MSG"
+
+echo "Stopping OpenSearch stack..."
+docker compose down
+
+echo ""
+echo "✓ OpenSearch stack stopped"
+echo ""
+echo "Memory freed: ~1.3 GB"
+echo "$UPTIME_MSG"
+echo ""
+echo "Your data is preserved in Docker volumes."
+echo "Start again with: bin/start"

@@ -1,0 +1,75 @@
+#!/bin/bash
+# Add lambda_name runtime field to cloudwatch indexes
+
+OPENSEARCH_URL="https://localhost:9200"
+OPENSEARCH_USER="admin"
+OPENSEARCH_PASS="Admin123!@Secure"
+
+echo "Adding lambda_name runtime field to cloudwatch-* indexes..."
+echo ""
+
+# Add to existing indexes
+curl -sk -u "$OPENSEARCH_USER:$OPENSEARCH_PASS" \
+  -X PUT "$OPENSEARCH_URL/cloudwatch-*/_mapping" \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "runtime": {
+    "lambda_name": {
+      "type": "keyword",
+      "script": {
+        "source": "if (doc[\"log_group.keyword\"].size() > 0) { String lg = doc[\"log_group.keyword\"].value; if (lg.startsWith(\"/aws/lambda/\")) { emit(lg.substring(12)); } else if (lg.startsWith(\"/aws/api_gw/\")) { emit(\"api-gw/\" + lg.substring(12)); } else { emit(lg); } }"
+      }
+    }
+  }
+}'
+
+echo -e "\n"
+
+# Also update the index template for future indexes
+echo "Updating cloudwatch template with runtime field..."
+curl -sk -u "$OPENSEARCH_USER:$OPENSEARCH_PASS" \
+  -X PUT "$OPENSEARCH_URL/_index_template/cloudwatch-template" \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "index_patterns": ["cloudwatch-*"],
+  "priority": 1,
+  "template": {
+    "mappings": {
+      "runtime": {
+        "lambda_name": {
+          "type": "keyword",
+          "script": {
+            "source": "if (doc[\"log_group.keyword\"].size() > 0) { String lg = doc[\"log_group.keyword\"].value; if (lg.startsWith(\"/aws/lambda/\")) { emit(lg.substring(12)); } else if (lg.startsWith(\"/aws/api_gw/\")) { emit(\"api-gw/\" + lg.substring(12)); } else { emit(lg); } }"
+          }
+        }
+      },
+      "properties": {
+        "@timestamp": {"type": "date"},
+        "message": {"type": "text"},
+        "log_group": {"type": "keyword"},
+        "log_stream": {"type": "keyword"},
+        "service_name": {"type": "keyword"},
+        "ingestion_time": {"type": "long"},
+        "parsed": {
+          "properties": {
+            "httpMethod": {"type": "keyword"},
+            "status": {"type": "keyword"},
+            "sourceIp": {"type": "ip"},
+            "routeKey": {"type": "keyword"},
+            "protocol": {"type": "keyword"},
+            "requestId": {"type": "keyword"},
+            "resourcePath": {"type": "keyword"}
+          }
+        }
+      }
+    }
+  }
+}'
+
+echo -e "\n\n✓ Runtime field 'lambda_name' added!"
+echo ""
+echo "You can now use 'lambda_name' in your visualizations."
+echo "It will show clean names like 'gardencam-stats' instead of '/aws/lambda/gardencam-stats'"
+echo ""
+echo "NOTE: Refresh your index pattern in OpenSearch Dashboards:"
+echo "  Stack Management → Index Patterns → cloudwatch-* → Refresh"

@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+# View operation logs from OpenSearch
+
+import requests
+import json
+import sys
+from datetime import datetime
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+OPENSEARCH_URL = "https://localhost:9200"
+OPENSEARCH_USER = "admin"
+OPENSEARCH_PASS = "Admin123!@Secure"
+
+size = int(sys.argv[1]) if len(sys.argv) > 1 else 20
+
+print(f"Recent operations (last {size}):\n")
+
+response = requests.post(
+    f"{OPENSEARCH_URL}/operations-log-*/_search",
+    auth=(OPENSEARCH_USER, OPENSEARCH_PASS),
+    headers={"Content-Type": "application/json"},
+    json={
+        "size": size,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "_source": ["@timestamp", "operation", "status", "details"]
+    },
+    verify=False
+)
+
+if response.status_code == 200:
+    hits = response.json()['hits']['hits']
+    for hit in hits:
+        src = hit['_source']
+        timestamp = src.get('@timestamp', '')
+        # Convert to local time for readability
+        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        local_time = dt.strftime('%Y-%m-%d %H:%M:%S')
+
+        operation = src.get('operation', '')
+        status = src.get('status', '')
+        details = src.get('details', '')
+
+        print(f"{local_time}  [{operation:6s}] {status:10s} - {details}")
+else:
+    print(f"Error: {response.status_code}")
+    print("Make sure OpenSearch is running with: bin/start")

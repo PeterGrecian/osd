@@ -1,0 +1,34 @@
+#!/bin/bash
+# Start OpenSearch stack
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+echo "Starting OpenSearch stack..."
+START_TIMESTAMP=$(date +%s)
+docker compose up -d
+
+echo ""
+echo "Waiting for services to be ready..."
+sleep 5
+
+echo ""
+docker compose ps
+
+# Save start time for uptime tracking
+echo "$START_TIMESTAMP" > /tmp/osd-start-time
+
+# Log the start operation
+bin/log-operation "start" "completed" "OpenSearch stack started at $(date -d @$START_TIMESTAMP '+%Y-%m-%d %H:%M:%S')"
+
+echo ""
+echo "✓ OpenSearch stack is running!"
+echo ""
+echo "Access:"
+echo "  - OpenSearch Dashboards: http://localhost:5601"
+echo "  - OpenSearch API:        https://localhost:9200"
+echo "  - Credentials:           admin / Admin123!@Secure"
+echo ""
+echo "View logs:    docker compose logs -f"
+echo "Stop stack:   bin/stop"

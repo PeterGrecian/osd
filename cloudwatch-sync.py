@@ -97,6 +97,32 @@ def push_to_opensearch(events, log_group):
             "ingestion_time": event.get('ingestionTime', event['timestamp']),
         }
 
+        # Extract clean lambda/service name for easier visualization
+        if log_group.startswith('/aws/lambda/'):
+            doc['lambda_name'] = log_group.replace('/aws/lambda/', '')
+        elif log_group.startswith('/aws/api_gw/'):
+            doc['service_name'] = log_group.replace('/aws/api_gw/', '')
+            doc['lambda_name'] = 'api-gw/' + doc['service_name']
+        else:
+            doc['lambda_name'] = log_group
+
+        # Extract duration from REPORT messages
+        msg = event['message']
+        if 'REPORT RequestId:' in msg and 'Duration:' in msg:
+            try:
+                # Extract duration value (e.g., "Duration: 1400.82 ms")
+                import re
+                match = re.search(r'Duration:\s+([\d.]+)\s+ms', msg)
+                if match:
+                    doc['duration_ms'] = float(match.group(1))
+                    doc['log_type'] = 'REPORT'
+            except:
+                pass
+        elif 'START RequestId:' in msg:
+            doc['log_type'] = 'START'
+        elif 'END RequestId:' in msg:
+            doc['log_type'] = 'END'
+
         # Try to parse JSON messages
         try:
             if event['message'].startswith('{'):

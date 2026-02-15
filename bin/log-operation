@@ -1,0 +1,39 @@
+#!/bin/bash
+# Log script operations to OpenSearch
+# Usage: log-operation <operation> <status> [details]
+
+OPENSEARCH_URL="https://localhost:9200"
+OPENSEARCH_USER="admin"
+OPENSEARCH_PASS="Admin123!@Secure"
+
+OPERATION="$1"
+STATUS="$2"
+DETAILS="${3:-}"
+
+# Generate index name based on current month
+INDEX_NAME="operations-log-$(date +%Y.%m)"
+
+# Build JSON document
+TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+HOSTNAME=$(hostname)
+USER=$(whoami)
+PWD_PATH=$(pwd)
+
+JSON=$(cat <<EOF
+{
+  "@timestamp": "$TIMESTAMP",
+  "operation": "$OPERATION",
+  "status": "$STATUS",
+  "hostname": "$HOSTNAME",
+  "user": "$USER",
+  "working_dir": "$PWD_PATH",
+  "details": "$DETAILS"
+}
+EOF
+)
+
+# Send to OpenSearch
+curl -sk -u "$OPENSEARCH_USER:$OPENSEARCH_PASS" \
+  -X POST "$OPENSEARCH_URL/$INDEX_NAME/_doc" \
+  -H 'Content-Type: application/json' \
+  -d "$JSON" > /dev/null 2>&1

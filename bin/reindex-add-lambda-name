@@ -1,0 +1,27 @@
+#!/bin/bash
+# Add lambda_name field to existing CloudWatch documents without re-pulling from AWS
+
+OPENSEARCH_URL="https://localhost:9200"
+OPENSEARCH_USER="admin"
+OPENSEARCH_PASS="Admin123!@Secure"
+
+echo "Adding lambda_name field to existing CloudWatch documents..."
+echo ""
+
+# Update all documents to add lambda_name field
+curl -sk -u "$OPENSEARCH_USER:$OPENSEARCH_PASS" \
+  -X POST "$OPENSEARCH_URL/cloudwatch-*/_update_by_query?pretty" \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "script": {
+    "source": "String lg = ctx._source.log_group; if (lg.startsWith(\"/aws/lambda/\")) { ctx._source.lambda_name = lg.substring(12); } else if (lg.startsWith(\"/aws/api_gw/\")) { ctx._source.service_name = lg.substring(12); ctx._source.lambda_name = \"api-gw/\" + ctx._source.service_name; } else { ctx._source.lambda_name = lg; }",
+    "lang": "painless"
+  }
+}'
+
+echo ""
+echo ""
+echo "✓ Done! All CloudWatch documents now have lambda_name field."
+echo ""
+echo "Refresh your index pattern in OpenSearch Dashboards:"
+echo "  Stack Management → Index Patterns → cloudwatch-* → Refresh"
